@@ -1,0 +1,430 @@
+How to install Kafka with multiple brokers
+*******************************************
+sudo apt-get update
+
+sudo apt install openjdk-8-jdk
+
+sudo apt-get install vim
+
+sudo vi .bashrc 
+
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+
+source .bashrc 
+
+wget https://dlcdn.apache.org/kafka/3.2.0/kafka_2.13-3.2.0.tgz 
+
+tar xzf kafka_2.13-3.2.0.tgz 
+
+sudo mv kafka_2.13-3.2.0 kafka
+
+cd kafka/
+sudo mkdir data
+cd data/
+sudo mkdir zookeeper
+sudo mkdir broker-0	
+sudo mkdir broker-1
+sudo mkdir broker-2
+
+sudo vi config/zookeeper.properties
+
+change this
+
+dataDir=/home/harikumar/kafka/data/zookeeper
+admin.enableServer=true
+admin.serverPort=9090
+serve.1=localhost:2888:3888
+
+
+make two files 
+**************
+
+sudo cp -r config/server.properties config/server-1.properties  
+sudo cp -r config/server.properties config/server-2.properties 
+
+
+sudo vi config/server.properties                         
+
+broker.id=0
+log.dirs=/home/harikumar/kafka/data/broker-0						
+num.partitions=2
+#listeners=PLAINTEX://:9092    ===>  unmute 
+listeners=PLAINTEX://:9092 
+
+sudo vi config/server-1.properties                                
+
+broker.id=1
+log.dirs=/home/harikumar/kafka/data/broker-1
+num.partitions=2
+#listeners=PLAINTEX://:9092    ===>  unmute 
+listeners=PLAINTEX://:9093 
+
+sudo vi config/server-2.properties                           
+
+broker.id=2
+log.dirs=/home/harikumar/kafka/data/broker-2
+num.partitions=2
+
+#listeners=PLAINTEX://:9092    ===>  unmute 
+listeners=PLAINTEX://:9094 
+
+start zookeeper and kafka brokers
+*********************************
+
+sudo bin/zookeeper-server-start.sh config/zookeeper.properties
+sudo bin/kafka-server-start.sh config/server.properties 
+sudo bin/kafka-server-start.sh config/server-1.properties 
+sudo bin/kafka-server-start.sh config/server-2.properties 
+
+ps -ef | grep zookeeper
+ps -ef | grep kafka
+
+          (or)
+              
+sudo bin/zookeeper-server-start.sh -daemon config/zookeeper.properties
+sudo bin/kafka-server-start.sh -daemon config/server.properties
+sudo bin/kafka-server-start.sh -daemon config/server-1.properties
+sudo bin/kafka-server-start.sh -daemon config/server-2.properties
+
+sudo bin/zookeeper-shell.sh localhost:2181
+
+ls /brokers/ids
+
+[0, 1, 2]
+
+
+Example Steps to implement CA, truststore and keystore for zookeeper SSL security:
+
+set java security
+******************
+
+https://www.oracle.com/in/java/technologies/javase-jce8-downloads.html
+
+us = harikumar.r@oasys.co
+pas = Oasys@123
+
+sudo apt install unzip
+
+unzip jce_policy-8.zip
+
+sudo cp -r /home/harikumar/Downloads/UnlimitedJCEPolicyJDK8/* /usr/lib/jvm/java-8-openjdk-amd64/jre/lib/security
+sudo cp -r /home/harikumar/Downloads/UnlimitedJCEPolicyJDK8/* /etc/java-8-openjdk-amd64/security
+
+cd /usr/lib/jvm/java-8-openjdk-amd64/jre/lib/security
+cd /etc/java-8-openjdk-amd64/security
+
+sudo chmod 777 local_policy.jar US_export_policy.jar
+
+Zookeeper ca-cert in zookeeper
+*******************************
+
+password == pem file == oasys
+password == trust == qwertyu
+password == keystore == asdfgh
+
+openssl req -new -x509 -keyout ca-key -out ca-cert -days 3650
+
+keytool -keystore kafka.zookeeper.truststore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.zookeeper.keystore.jks -alias zookeeper -validity 3650 -genkey -keyalg RSA -ext SAN=dns:localhost
+
+keytool -keystore kafka.zookeeper.keystore.jks -alias zookeeper -certreq -file ca-request-zookeeper
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in ca-request-zookeeper -out ca-signed-zookeeper -days 3650 -CAcreateserial
+
+keytool -keystore kafka.zookeeper.keystore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.zookeeper.keystore.jks -alias zookeeper -import -file ca-signed-zookeeper
+
+
+sudo rm -rf ca-cert.srl ca-request-zookeeper ca-signed-zookeeper
+
+
+zookeeper-client ssl ca-cert
+****************************
+password == trust == qwertyu
+password == keystore == asdfgh
+
+keytool -keystore kafka.zookeeper-client.truststore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.zookeeper-client.keystore.jks -alias zookeeper-client -validity 3650 -genkey -keyalg RSA -ext SAN=dns:localhost
+
+keytool -keystore kafka.zookeeper-client.keystore.jks -alias zookeeper-client -certreq -file ca-request-zookeeper-client
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in ca-request-zookeeper-client -out ca-signed-zookeeper-client -days 3650 -CAcreateserial
+
+keytool -keystore kafka.zookeeper-client.keystore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.zookeeper-client.keystore.jks -alias zookeeper-client -import -file ca-signed-zookeeper-client
+
+cd ssl
+sudo rm -rf ca-cert.srl ca-request-zookeeper-client ca-signed-zookeeper-client
+
+server.properties ca-cert 
+*************************
+
+password == trust == qwertyu
+password == keystore == asdfgh
+
+keytool -keystore kafka.broker0.truststore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker0.keystore.jks -alias broker0 -validity 3650 -genkey -keyalg RSA -ext SAN=dns:localhost
+
+keytool -keystore kafka.broker0.keystore.jks -alias broker0 -certreq -file ca-request-broker0
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in ca-request-broker0 -out ca-signed-broker0 -days 3650 -CAcreateserial
+
+keytool -keystore kafka.broker0.keystore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker0.keystore.jks -alias broker0 -import -file ca-signed-broker0
+
+cd ssh
+sudo rm -rf ca-cert.srl ca-request-broker0 ca-signed-broker0
+
+server-1.properties ca-cert 
+****************************
+
+password == trust == qwertyu
+password == keystore == asdfgh
+
+keytool -keystore kafka.broker1.truststore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker1.keystore.jks -alias broker1 -validity 3650 -genkey -keyalg RSA -ext SAN=dns:localhost
+
+keytool -keystore kafka.broker1.keystore.jks -alias broker1 -certreq -file ca-request-broker1
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in ca-request-broker1 -out ca-signed-broker1 -days 3650 -CAcreateserial
+
+keytool -keystore kafka.broker1.keystore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker1.keystore.jks -alias broker1 -import -file ca-signed-broker1
+
+cd ssh
+sudo rm -rf ca-cert.srl ca-request-broker1 ca-signed-broker1
+
+server-2.properties ca-cert 
+****************************
+
+password == trust == qwertyu
+password == keystore == asdfgh
+
+keytool -keystore kafka.broker2.truststore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker2.keystore.jks -alias broker2 -validity 3650 -genkey -keyalg RSA -ext SAN=dns:localhost
+
+keytool -keystore kafka.broker2.keystore.jks -alias broker2 -certreq -file ca-request-broker2
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in ca-request-broker2 -out ca-signed-broker2 -days 3650 -CAcreateserial
+
+keytool -keystore kafka.broker2.keystore.jks -alias ca-cert -import -file ca-cert
+
+keytool -keystore kafka.broker2.keystore.jks -alias broker2 -import -file ca-signed-broker2
+
+cd ssh
+sudo rm -rf ca-cert.srl ca-request-broker2 ca-signed-broker2
+
+
+ZOOKEEPER -- PROPERTIES
+************************
+
+sudo vi config/zookeeper.properties
+
+secureClientPort=2182
+authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
+serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
+ssl.trustStore.location=/home/harikumar/kafka/ssl/kafka.zookeeper.truststore.jks
+ssl.trustStore.password=qwerty
+ssl.keyStore.location=/home/harikumar/kafka/ssl/kafka.zookeeper.keystore.jks
+ssl.keyStore.password=asdfgh
+ssl.clientAuth=need
+
+
+ZOOKEEPER-ClIENT-- PROPERTIES
+*****************************
+
+sudo vi config/zookeeper-client.properties
+
+zookeeper.connect=localhost:2182
+zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.protocol=TLSv1.2
+zookeeper.ssl.truststore.location=/home/harikumar/kafka/ssl/kafka.zookeeper-client.truststore.jks
+zookeeper.ssl.truststore.password=qwerty
+zookeeper.ssl.keystore.location=/home/harikumar/kafka/ssl/kafka.zookeeper-client.keystore.jks
+zookeeper.ssl.keystore.password=asdfgh
+
+
+SERVER PROPERTIES
+******************
+
+sudo vi config/server.properties
+
+zookeeper-connect=localhost:2181 ========>>>  zookeeper-connect=localhost:2182    
+#listeners=PLAINTEXT://:9092  =========>>>>   listeners=SSL://localhost:9092
+#advertised.listeners=PLAINTEXT://your.host.name:9092  ==========>>>        advertised.listeners=SSL://localhost:9092
+
+zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.protocol=TLSv1.2
+zookeeper.ssl.truststore.location=/home/user/kafka/ssl/kafka.broker0.truststore.jks
+zookeeper.ssl.truststore.password=qwerty
+zookeeper.ssl.keystore.location=/home/user/kafka/ssl/kafka.broker0.keystore.jks
+zookeeper.ssl.keystore.password=asdfgh
+zookeeper.set.acl=true
+
+ssl.truststore.location=/home/user/kafka/ssl/kafka.broker0.truststore.jks
+ssl.truststore.password=qwerty
+ssl.keystore.location=/home/user/kafka/ssl/kafka.broker0.keystore.jks
+ssl.keystore.password=asdfgh
+ssl.key.password=asdfgh
+security.inter.broker.protocol=SSL
+ssl.client.auth=required
+ssl.protocol=TLSv1.2
+
+
+SERVER-1 PROPERTIES
+*******************
+
+sudo vi config/server-1.properties
+
+zookeeper-connect=localhost:2181 ========>>>  zookeeper-connect=localhost:2182    
+#listeners=PLAINTEXT://:9092  =========>>>>   listeners=SSL://localhost:9092
+#advertised.listeners=PLAINTEXT://your.host.name:9092  ==========>>>        advertised.listeners=SSL://localhost:9092
+
+zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.protocol=TLSv1.2
+zookeeper.ssl.truststore.location=/home/user/kafka/ssl/kafka.broker1.truststore.jks
+zookeeper.ssl.truststore.password=qwerty
+zookeeper.ssl.keystore.location=/home/user/kafka/ssl/kafka.broker1.keystore.jks
+zookeeper.ssl.keystore.password=asdfgh
+zookeeper.set.acl=true
+
+ssl.truststore.location=/home/user/kafka/ssl/kafka.broker1.truststore.jks
+ssl.truststore.password=qwerty
+ssl.keystore.location=/home/user/kafka/ssl/kafka.broker1.keystore.jks
+ssl.keystore.password=asdfgh
+ssl.key.password=asdfgh
+security.inter.broker.protocol=SSL
+ssl.client.auth=required
+ssl.protocol=TLSv1.2
+
+
+SERVER-2 PROPERTIES
+*******************
+
+sudo vi config/server-2.properties
+
+
+zookeeper-connect=localhost:2181 ========>>>  zookeeper-connect=localhost:2182    
+#listeners=PLAINTEXT://:9092  =========>>>>   listeners=SSL://localhost:9092
+#advertised.listeners=PLAINTEXT://your.host.name:9092  ==========>>>        advertised.listeners=SSL://localhost:9092
+
+zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.client.enable=true
+zookeeper.ssl.protocol=TLSv1.2
+zookeeper.ssl.truststore.location=/home/user/kafka/ssl/kafka.broker2.truststore.jks
+zookeeper.ssl.truststore.password=qwerty
+zookeeper.ssl.keystore.location=/home/user/kafka/ssl/kafka.broker2.keystore.jks
+zookeeper.ssl.keystore.password=asdfgh
+zookeeper.set.acl=true
+
+ssl.truststore.location=/home/user/kafka/ssl/kafka.broker2.truststore.jks
+ssl.truststore.password=qwerty
+ssl.keystore.location=/home/user/kafka/ssl/kafka.broker2.keystore.jks
+ssl.keystore.password=asdfgh
+ssl.key.password=asdfgh
+security.inter.broker.protocol=SSL
+ssl.client.auth=required
+ssl.protocol=TLSv1.2
+
+
+sudo bin/zookeeper-server-start.sh config/zookeeper.properties
+sudo bin/kafka-server-start.sh config/server.properties 
+sudo bin/kafka-server-start.sh config/server-1.properties 
+sudo bin/kafka-server-start.sh config/server-2.properties 
+
+ps -ef | grep zookeeper
+ps -ef | grep kafka
+
+
+sudo bin/zookeeper-server-start.sh -daemon config/zookeeper.properties
+sudo bin/kafka-server-start.sh -daemon config/server.properties
+sudo bin/kafka-server-start.sh -daemon config/server-1.properties
+sudo bin/kafka-server-start.sh -daemon config/server-2.properties
+
+
+SSL CONFIG LINES
+*****************
+
+sudo vi config/ssl.config
+
+ssl.endpoint.identification.algorithm=https
+security.protocol=SSL
+ssl.keystore.location=/home/user/kafka/ssl/kafka.broker0.keystore.jks
+ssl.keystore.password=asdfgh
+ssl.key.password=asdfgh
+ssl.truststore.location=/home/user/kafka/ssl/kafka.broker0.truststore.jks
+ssl.truststore.password=qwerty
+
+
+producer and consumer config
+*****************************
+
+sudo vi config/client-ssl.config
+
+security.protocol=SSL
+ssl.keystore.location=/home/user/kafka/ssl/kafka.broker0.keystore.jks
+ssl.keystore.password=asdfgh
+ssl.key.password=asdfgh
+ssl.truststore.location=/home/user/kafka/ssl/kafka.broker0.truststore.jks
+ssl.truststore.password=qwerty
+ssl.key.password=asdfgh
+ssl.endpoint.identification.algorithm=
+
+
+sudo bin/zookeeper-shell.sh localhost:2182 -zk-tls-config-file config/zookeeper-client.properties
+
+[sudo] password for harikumar: 
+Connecting to localhost:2182
+Welcome to ZooKeeper!
+JLine support is disabled
+
+WATCHER::
+
+WatchedEvent state:SyncConnected type:None path:null
+
+ls /brokers/ids
+[0, 1, 2]
+
+check topic in kafka
+********************
+sudo bin/kafka-topics.sh --list --bootstrap-server localhost:9092 --command-config config/ssl.config
+
+IF You want to delete topic
+****************************
+sudo vi config/server.properties
+
+## past this line below
+delete.topic.enable=true  
+
+sudo bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic quickstart-events --command-config config/ssl.config
+
+create topic comm
+*****************
+sudo bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --topic first-topics --command-config config/ssl.config --partitions 2 --replication-factor 3
+
+describe topic
+**************
+sudo bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --command-config config/ssl.config
+sudo bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic first-topics --command-config config/ssl.config
+
+producer
+*********
+sudo bin/kafka-console-producer.sh --broker-list localhost:9092 --topic first-topics --producer.config config/client-ssl.config
+
+consumer
+********
+sudo bin/kafka-console-consumer.sh --bootstrap-server localhost:9092,localhost:9093,localhost:9094 --topic first-topics --consumer.config config/client-ssl.config --from-beginning
+
+
