@@ -1,0 +1,161 @@
+INSTALL JAVA AND SET HOME PATH
+*******************************
+https://vitux.com/how-to-setup-java_home-path-in-ubuntu/
+
+How to Install MYSQL and basic setup
+*************************************
+https://www.digitalocean.com/community/tutorials/how-to-install-mysql-on-ubuntu-20-04
+
+PASSWORD ERROR
+***************
+https://exerror.com/failed-error-set-password-has-no-significance-for-user-rootlocalhost-as-the-authentication-method-used-doesnt-store-authentication-data-in-the-mysql-server/
+
+Kafka install
+**************
+https://tecadmin.net/how-to-install-apache-kafka-on-ubuntu-20-04/
+
+Debezium Connecter MYSQL
+*************************
+https://sandeepkattepogu.medium.com/streaming-data-from-mysql-into-apache-kafka-db9b5468667e
+
+Create DB Information
+**********************
+
+sudo vi testdb.sql
+
+-- Create the test database
+CREATE DATABASE testDB;
+GO
+USE testDB;
+
+-- Create some fruit
+CREATE TABLE fruit (
+id INTEGER ZEROFILL NOT NULL AUTO_INCREMENT,
+fruit_name VARCHAR(255) NOT NULL,
+num_sold INTEGER NOT NULL,
+PRIMARY KEY(id) 
+
+);
+
+-- Insert test values
+INSERT INTO fruit(fruit_name, num_sold)
+VALUES ('Apple', 5);
+INSERT INTO fruit(fruit_name, num_sold)
+VALUES ('Pear', 10);
+INSERT INTO fruit(fruit_name, num_sold)
+VALUES ('Peach', 20);
+
+sudo chmod 777 testdb.sql
+
+terminal
+*********
+
+mysql -u root -p < testdb.sql
+
+sudo vi /etc/mysql/my.cnf
+
+[mysqld]
+
+server-id = 42
+
+log_bin = mysql-bin
+
+binlog_row_image = full
+
+binlog_format = row
+
+expire_logs_days = 10
+
+gtid_mode=on
+
+enforce_gtid_consistency=on
+
+interactive_timeout=600
+wait_timeout=600
+binlog_rows_query_log_events=on
+
+Mysql grant all privileges
+***************************
+
+mysql -u root -p
+
+create user and set password
+
+CREATE USER 'dbuser'@'%' IDENTIFIED BY 'Password1@';
+
+grand all access
+
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON . TO 'dbuser'@'%';
+
+ALTER USER 'dbuser'@'%' IDENTIFIED WITH mysql_native_password BY 'Password1@';
+
+FLUSH PRIVILEGES;
+
+Set the GTID Consistency and the GTID Mode
+
+SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = OFF;
+SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = ON;
+SET @@GLOBAL.GTID_MODE = OFF;
+SET @@GLOBAL.GTID_MODE = OFF_PERMISSIVE;
+SET @@GLOBAL.GTID_MODE = ON_PERMISSIVE;
+
+Before proceeding, make sure the following table shows a value of “0”
+**********************************************************************
+
+SHOW STATUS LIKE 'ONGOING_ANONYMOUS_TRANSACTION_COUNT';
+
+SET @@GLOBAL.GTID_MODE = ON;
+
+exit
+
+sudo systemctl restart mysql
+
+Installing/Configuring Kafka and Debezium Connector
+****************************************************
+
+wget https://archive.apache.org/dist/kafka/2.5.0/kafka_2.12-2.5.0.tgz
+
+tar -xvzf kafka_2.12-2.5.0.tgz
+
+Downloading Debezium files Official Page
+*****************************************
+
+https://repo1.maven.org/maven2/io/debezium/
+ 
+wget https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/1.1.1.Final/debezium-connector-mysql-1.1.1.Final-plugin.tar.gz
+
+tar -xvzf debezium-connector-mysql-1.1.1.Final-plugin.tar.gz
+
+create dir and change owner
+****************************
+sudo mkdir /etc/kafka
+
+i have only one user root so i dont need to root
+*************************************************
+sudo chown -R root /etc/kafka
+
+copy to folder to etc/kafka
+
+sudo cp -r kafka_2.12-2.5.0/* /etc/kafka/
+
+sudo mkdir /etc/kafka/conns
+
+sudo cp -r debezium-connector-mysql /etc/kafka/conns/
+
+sudo vi /etc/kafka/config/connect-distributed.properties
+
+plugin.path=/etc/kafka/conns
+
+Start all services
+******************
+sudo /etc/kafka/bin/zookeeper-server-start.sh /etc/kafka/config/zookeeper.properties &> zookeeper_log &
+
+sudo /etc/kafka/bin/kafka-server-start.sh /etc/kafka/config/server.properties &> broker_log &
+
+sudo /etc/kafka/bin/connect-distributed.sh /etc/kafka/config/connect-distributed.properties &> connect_log &
+
+
+
+sudo /etc/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic fruitserver.testDB.fruit --from-beginning
+ 
+ 
