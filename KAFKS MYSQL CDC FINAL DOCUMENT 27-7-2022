@@ -10,6 +10,7 @@ https://linuxize.com/post/how-to-install-sublime-text-3-on-ubuntu-20-04/
 
 INSTALL JAVA AND SET HOME PATH
 *******************************
+https://docs.datastax.com/en/jdk-install/doc/jdk-install/installOpenJdkDeb.html
 https://vitux.com/how-to-setup-java_home-path-in-ubuntu/
 
 sudo apt-get install vim
