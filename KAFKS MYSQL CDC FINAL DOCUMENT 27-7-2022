@@ -88,6 +88,9 @@ CREATE USER 'dbuser'@'%' IDENTIFIED BY 'Password1@';
 grand all access
 ****************
 GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON . TO 'dbuser'@'%';
+or
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'dbuser'@'%';
+
 
 ALTER USER 'dbuser'@'%' IDENTIFIED WITH mysql_native_password BY 'Password1@';
 
